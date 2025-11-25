@@ -45,11 +45,11 @@ const StudentDashboard = () => {
       <div className="grid md:grid-cols-3 gap-4">
         <StatCard label="Active courses" value={enrollments.length} />
         <StatCard label="Avg. progress" value={`${avgProgress}%`} helper="Based on enrolled courses" />
-        <StatCard
-          label="Single session"
-          value="Protected"
-          helper="JWT enforced via Spring Security"
-        />
+        
+     
+     
+     
+     
       </div>
       <section className="space-y-4">
         <div className="flex items-center justify-between">

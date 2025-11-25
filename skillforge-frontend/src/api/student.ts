@@ -39,3 +39,17 @@ export const updateProgress = async (email: string, courseId: string, progress: 
   return data
 }
 
+export const submitQuiz = async (
+  courseId: string,
+  sectionId: string,
+  quizId: string,
+  studentEmail: string,
+  answers: Record<number, number>,
+  durationSeconds?: number
+) => {
+  const payload: any = { studentEmail, answers }
+  if (durationSeconds !== undefined) payload.durationSeconds = durationSeconds
+  const { data } = await apiClient.post(`/api/student/course/${courseId}/sections/${sectionId}/quizzes/${quizId}/submit`, payload)
+  return data
+}
+

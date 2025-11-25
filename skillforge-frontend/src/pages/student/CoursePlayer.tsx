@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation, useQueries } from '@tanstack/react-query'
-import { getCourseById, getCourseVideos, updateProgress, getMyCourses } from '../../api/student'
+import { getCourseById, getCourseVideos, updateProgress, getMyCourses, submitQuiz as submitQuizApi } from '../../api/student'
 import LoadingScreen from '../../components/common/LoadingScreen'
 import VideoPlayer from '../../components/common/VideoPlayer'
 import { useAuth } from '../../contexts/AuthContext'
@@ -75,29 +75,33 @@ const CoursePlayer = () => {
     }, 2000)
   }
 
-  const submitQuiz = () => {
-    if (!selectedQuiz) return
+  const submitQuiz = async () => {
+    if (!selectedQuiz || !user?.email) return
 
-    // Calculate score
-    let correctCount = 0
-    selectedQuiz.questions?.forEach((q, idx) => {
-      if (quizAnswers[idx] === q.correctOptionIndex) {
-        correctCount++
-      }
-    })
+    try {
+      const sectionId = courseQuery.data?.sections?.find((s) => s.quizzes?.some((q) => q.id === selectedQuiz.id))?.id ?? ''
+      const answersPayload: Record<number, number> = {}
+      Object.keys(quizAnswers).forEach((k) => {
+        answersPayload[Number(k)] = quizAnswers[Number(k)]
+      })
 
-    const score = Math.round((correctCount / (selectedQuiz.questions?.length || 1)) * 100)
-    setQuizScore(score)
-    setQuizSubmitted(true)
-
-    // Show feedback
-    const passed = score >= (selectedQuiz.passingScore || 70)
-    if (passed) {
-      toast.success(`Quiz completed! Score: ${score}% (Passed)`)
-    } else {
-      toast.error(
-        `Quiz completed! Score: ${score}% (Failed - ${selectedQuiz.passingScore}% required)`
+      const resp: any = await submitQuizApi(
+        courseId ?? '',
+        sectionId,
+        selectedQuiz.id ?? '',
+        user.email,
+        answersPayload,
+        undefined
       )
+
+      setQuizScore(resp.score ?? 0)
+      setQuizSubmitted(true)
+
+      if (resp.passed) toast.success(`Quiz completed! Score: ${resp.score}% (Passed)`)
+      else toast.error(`Quiz completed! Score: ${resp.score}% (Failed)`)
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to submit quiz')
     }
   }
 

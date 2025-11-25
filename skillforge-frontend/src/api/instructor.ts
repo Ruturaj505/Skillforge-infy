@@ -115,3 +115,20 @@ export const deleteQuiz = async (courseId: string, sectionId: string, quizId: st
   )
   return data
 }
+
+export const generateQuiz = async (
+  courseId: string,
+  sectionId: string,
+  topic: string,
+  numQuestions = 5,
+  timeLimitSeconds?: number
+) => {
+  const params: any = { topic, numQuestions }
+  if (timeLimitSeconds) params.timeLimitSeconds = timeLimitSeconds
+  const { data } = await apiClient.post<Course>(
+    `/api/instructor/courses/${courseId}/sections/${sectionId}/generate-quiz`,
+    null,
+    { params }
+  )
+  return data
+}

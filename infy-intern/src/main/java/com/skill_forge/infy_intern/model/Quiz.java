@@ -10,6 +10,8 @@ public class Quiz {
     private List<QuizQuestion> questions = new ArrayList<>();
     private Integer passingScore; // e.g., 70 for 70%
     private Boolean isPublished;
+    private Integer timeLimitSeconds; // optional time limit in seconds
+    private Boolean generatedByAI = false;
 
     public Quiz() {}
 
@@ -38,4 +40,10 @@ public class Quiz {
 
     public Boolean getIsPublished() { return isPublished; }
     public void setIsPublished(Boolean isPublished) { this.isPublished = isPublished; }
+
+    public Integer getTimeLimitSeconds() { return timeLimitSeconds; }
+    public void setTimeLimitSeconds(Integer timeLimitSeconds) { this.timeLimitSeconds = timeLimitSeconds; }
+
+    public Boolean getGeneratedByAI() { return generatedByAI; }
+    public void setGeneratedByAI(Boolean generatedByAI) { this.generatedByAI = generatedByAI; }
 }

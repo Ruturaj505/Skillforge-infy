@@ -9,6 +9,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
+
+import com.skill_forge.infy_intern.model.QuizResponse;
 
 @RestController
 @RequestMapping("/api/student")
@@ -55,5 +58,37 @@ public class StudentController {
                                                  @RequestParam String courseId,
                                                  @RequestParam double progress) {
         return ResponseEntity.ok(studentService.updateProgress(email, courseId, progress));
+    }
+
+    // 🟢 Submit quiz answers for grading
+    @PostMapping("/course/{courseId}/sections/{sectionId}/quizzes/{quizId}/submit")
+    public ResponseEntity<?> submitQuiz(@PathVariable String courseId,
+                                        @PathVariable String sectionId,
+                                        @PathVariable String quizId,
+                                        @RequestBody Map<String, Object> payload) {
+        try {
+            String studentEmail = (String) payload.get("studentEmail");
+            // payload.answers expected to be a map of stringified indices -> integer selected index
+            Object rawAnswers = payload.get("answers");
+            java.util.Map<Integer, Integer> answers = new java.util.HashMap<>();
+            if (rawAnswers instanceof java.util.Map) {
+                java.util.Map<?,?> raw = (java.util.Map<?,?>) rawAnswers;
+                for (java.util.Map.Entry<?,?> e : raw.entrySet()) {
+                    try {
+                        Integer key = Integer.parseInt(e.getKey().toString());
+                        Integer val = Integer.parseInt(e.getValue().toString());
+                        answers.put(key, val);
+                    } catch (Exception ex) {
+                        // skip bad entries
+                    }
+                }
+            }
+            Integer durationSeconds = payload.get("durationSeconds") == null ? null : Integer.parseInt(payload.get("durationSeconds").toString());
+
+            com.skill_forge.infy_intern.model.QuizResponse resp = studentService.gradeQuiz(courseId, sectionId, quizId, studentEmail, answers, durationSeconds);
+            return ResponseEntity.ok(resp);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(500).body(java.util.Map.of("error", e.getMessage()));
+        }
     }
 }

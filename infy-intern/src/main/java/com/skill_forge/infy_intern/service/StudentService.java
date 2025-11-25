@@ -14,10 +14,12 @@ public class StudentService {
 
     private final CourseRepository courseRepository;
     private final EnrollmentRepository enrollmentRepository;
+    private final CourseService courseService;
 
-    public StudentService(CourseRepository courseRepository, EnrollmentRepository enrollmentRepository) {
+    public StudentService(CourseRepository courseRepository, EnrollmentRepository enrollmentRepository, CourseService courseService) {
         this.courseRepository = courseRepository;
         this.enrollmentRepository = enrollmentRepository;
+        this.courseService = courseService;
     }
 
     public List<Course> browseCourses() {
@@ -56,5 +58,10 @@ public class StudentService {
 
     public Optional<Course> getCourseById(String courseId) {
         return courseRepository.findById(courseId);
+    }
+
+    // Delegate grading to CourseService
+    public com.skill_forge.infy_intern.model.QuizResponse gradeQuiz(String courseId, String sectionId, String quizId, String studentEmail, java.util.Map<Integer,Integer> answers, Integer durationSeconds) {
+        return courseService.gradeQuizSubmission(courseId, sectionId, quizId, studentEmail, answers, durationSeconds);
     }
 }

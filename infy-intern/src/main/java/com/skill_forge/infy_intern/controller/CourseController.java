@@ -3,6 +3,9 @@ package com.skill_forge.infy_intern.controller;
 import com.skill_forge.infy_intern.model.Course;
 import com.skill_forge.infy_intern.model.Quiz;
 import com.skill_forge.infy_intern.model.VideoEntity;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RequestBody;
+import java.util.Map;
 import com.skill_forge.infy_intern.service.CourseService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -152,6 +155,21 @@ public class CourseController {
                                      @RequestBody Quiz quiz) {
         try {
             Course updated = courseService.addQuizToSection(courseId, sectionId, quiz);
+            return ResponseEntity.ok(updated);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // 🟢 Generate quiz via AI for a given topic
+    @PostMapping("/{courseId}/sections/{sectionId}/generate-quiz")
+    public ResponseEntity<?> generateQuiz(@PathVariable String courseId,
+                                          @PathVariable String sectionId,
+                                          @RequestParam String topic,
+                                          @RequestParam(required = false, defaultValue = "5") int numQuestions,
+                                          @RequestParam(required = false) Integer timeLimitSeconds) {
+        try {
+            Course updated = courseService.generateQuizFromTopic(courseId, sectionId, topic, numQuestions, timeLimitSeconds);
             return ResponseEntity.ok(updated);
         } catch (RuntimeException e) {
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));

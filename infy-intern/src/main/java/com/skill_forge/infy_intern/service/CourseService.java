@@ -7,6 +7,16 @@ import com.skill_forge.infy_intern.model.Section;
 import com.skill_forge.infy_intern.model.VideoEntity;
 import com.skill_forge.infy_intern.repository.CourseRepository;
 import com.skill_forge.infy_intern.repository.VideoRepository;
+import com.skill_forge.infy_intern.model.QuizResponse;
+import com.skill_forge.infy_intern.repository.QuizResponseRepository;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestTemplate;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -19,13 +29,24 @@ public class CourseService {
     private final CourseRepository courseRepository;
     private final VideoRepository videoRepository;
     private final CloudinaryService cloudinaryService;
+    private final QuizResponseRepository quizResponseRepository;
+    private final String perplexityApiKey;
+    private final String perplexityApiUrl;
 
+
+    // Additional constructor used by Spring to inject QuizResponseRepository and API config
     public CourseService(CourseRepository courseRepository,
                          VideoRepository videoRepository,
-                         CloudinaryService cloudinaryService) {
+                         CloudinaryService cloudinaryService,
+                         QuizResponseRepository quizResponseRepository,
+                         @Value("${perplexity.api.key:}") String perplexityApiKey,
+                         @Value("${perplexity.api.url:https://api.perplexity.ai/v1/generate}") String perplexityApiUrl) {
         this.courseRepository = courseRepository;
         this.videoRepository = videoRepository;
         this.cloudinaryService = cloudinaryService;
+        this.quizResponseRepository = quizResponseRepository;
+        this.perplexityApiKey = perplexityApiKey;
+        this.perplexityApiUrl = perplexityApiUrl;
     }
 
     // 🟢 Create a new course
@@ -389,5 +410,225 @@ public class CourseService {
         }
 
         return courseRepository.save(course);
+    }
+
+    // 🟢 Generate a quiz using external AI (Perplexity) based on a topic provided by instructor
+    public Course generateQuizFromTopic(String courseId, String sectionId, String topic, int numQuestions, Integer timeLimitSeconds) {
+        // Check if API key is configured; if not, fall back to mock generator
+        if (perplexityApiKey == null || perplexityApiKey.isEmpty() || perplexityApiKey.equals("")) {
+            System.out.println("⚠️  Perplexity API key not configured. Using mock quiz generator for testing.");
+            return generateMockQuiz(courseId, sectionId, topic, numQuestions, timeLimitSeconds);
+        }
+
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found"));
+
+        Section section = course.getSections().stream()
+                .filter(s -> sectionId.equals(s.getId()))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Section not found"));
+
+        try {
+            // Build prompt for AI
+            String prompt = String.format(
+                    "Generate %d multiple-choice questions (4 options each) about the topic: %s. " +
+                    "Return a JSON object with key 'questions' which is an array of objects {question, options, correctOptionIndex, explanation}. " +
+                    "Do not include any extra text outside JSON.",
+                    numQuestions, topic
+            );
+
+            ObjectMapper mapper = new ObjectMapper();
+            RestTemplate rest = new RestTemplate();
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Bearer " + perplexityApiKey);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            // request body - many external APIs accept prompt, adapt as necessary
+            java.util.Map<String,Object> payload = new java.util.HashMap<>();
+            payload.put("prompt", prompt);
+            payload.put("max_questions", numQuestions);
+
+            HttpEntity<java.util.Map<String,Object>> entity = new HttpEntity<>(payload, headers);
+            ResponseEntity<String> response = rest.postForEntity(perplexityApiUrl, entity, String.class);
+
+            String body = response.getBody();
+            JsonNode root = mapper.readTree(body);
+
+            JsonNode questionsNode = root.path("questions");
+            if (!questionsNode.isArray()) {
+                // try if root is array
+                if (root.isArray()) {
+                    questionsNode = root;
+                } else {
+                    throw new RuntimeException("AI response did not include a 'questions' array. Response: " + body);
+                }
+            }
+
+            Quiz quiz = new Quiz();
+            quiz.setId(java.util.UUID.randomUUID().toString());
+            quiz.setTitle("Quiz: " + topic);
+            quiz.setDescription("Auto-generated quiz on: " + topic);
+            quiz.setPassingScore(70);
+            quiz.setIsPublished(true);
+            quiz.setGeneratedByAI(true);
+            quiz.setTimeLimitSeconds(timeLimitSeconds);
+
+            java.util.List<com.skill_forge.infy_intern.model.QuizQuestion> qlist = new java.util.ArrayList<>();
+            for (JsonNode qn : questionsNode) {
+                com.skill_forge.infy_intern.model.QuizQuestion qq = new com.skill_forge.infy_intern.model.QuizQuestion();
+                qq.setQuestion(qn.path("question").asText(""));
+                java.util.List<String> opts = new java.util.ArrayList<>();
+                if (qn.has("options") && qn.get("options").isArray()) {
+                    for (JsonNode on : qn.get("options")) {
+                        opts.add(on.asText());
+                    }
+                }
+                qq.setOptions(opts);
+                qq.setCorrectOptionIndex(qn.path("correctOptionIndex").asInt(0));
+                qq.setExplanation(qn.path("explanation").asText(null));
+                qq.setId(java.util.UUID.randomUUID().toString());
+                qlist.add(qq);
+            }
+
+            quiz.setQuestions(qlist);
+
+            // Attach quiz to section and save
+            return addQuizToSection(courseId, sectionId, quiz);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate quiz from AI: " + e.getMessage(), e);
+        }
+    }
+
+    // 🟢 Generate a mock quiz for testing when API is not configured
+    private Course generateMockQuiz(String courseId, String sectionId, String topic, int numQuestions, Integer timeLimitSeconds) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found"));
+
+        Section section = course.getSections().stream()
+                .filter(s -> sectionId.equals(s.getId()))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Section not found"));
+
+        Quiz quiz = new Quiz();
+        quiz.setId(java.util.UUID.randomUUID().toString());
+        quiz.setTitle("Quiz: " + topic);
+        quiz.setDescription("Auto-generated quiz on: " + topic + " (Mock - API not configured)");
+        quiz.setPassingScore(70);
+        quiz.setIsPublished(true);
+        quiz.setGeneratedByAI(true);
+        quiz.setTimeLimitSeconds(timeLimitSeconds);
+
+        java.util.List<com.skill_forge.infy_intern.model.QuizQuestion> qlist = new java.util.ArrayList<>();
+
+        // Generate mock questions with unique options per question
+        String[][] questionTemplates = {
+            {
+                "What is the primary definition of " + topic + "?",
+                "A fundamental concept in " + topic,
+                "An advanced technique in " + topic,
+                "A historical reference to " + topic,
+                "A modern interpretation of " + topic
+            },
+            {
+                "Which of the following is a key characteristic of " + topic + "?",
+                "It focuses on efficiency and speed",
+                "It emphasizes scalability and flexibility",
+                "It prioritizes security and reliability",
+                "It combines all of the above"
+            },
+            {
+                "How is " + topic + " typically implemented?",
+                "Through a top-down approach",
+                "Using a bottom-up methodology",
+                "By iterative development cycles",
+                "By waterfall project management"
+            },
+            {
+                "What is one major advantage of " + topic + "?",
+                "Reduces complexity significantly",
+                "Improves performance and throughput",
+                "Enhances user experience",
+                "Lowers overall costs"
+            },
+            {
+                "Which field or industry benefits most from " + topic + "?",
+                "Software development",
+                "Data science and analytics",
+                "Cloud computing",
+                "All fields that require structured solutions"
+            }
+        };
+
+        for (int i = 0; i < Math.min(numQuestions, questionTemplates.length); i++) {
+            String[] template = questionTemplates[i];
+            
+            com.skill_forge.infy_intern.model.QuizQuestion qq = new com.skill_forge.infy_intern.model.QuizQuestion();
+            qq.setQuestion(template[0]);
+            
+            // Create options from array indices 1-4
+            java.util.List<String> options = new java.util.ArrayList<>();
+            options.add(template[1]);
+            options.add(template[2]);
+            options.add(template[3]);
+            options.add(template[4]);
+            
+            qq.setOptions(options);
+            qq.setCorrectOptionIndex((i + 1) % 4); // Rotate correct answer position
+            qq.setExplanation("This is a sample question generated without API access. To enable real AI-generated questions with " + topic + ", configure your Perplexity API key in the server environment.");
+            qq.setId(java.util.UUID.randomUUID().toString());
+            qlist.add(qq);
+        }
+
+        quiz.setQuestions(qlist);
+
+        // Attach quiz to section and save
+        return addQuizToSection(courseId, sectionId, quiz);
+    }
+
+    // 🟢 Grade a student quiz submission, store QuizResponse
+    public com.skill_forge.infy_intern.model.QuizResponse gradeQuizSubmission(String courseId, String sectionId, String quizId, String studentEmail, java.util.Map<Integer,Integer> answers, Integer durationSeconds) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found"));
+
+        Section section = course.getSections().stream()
+                .filter(s -> sectionId.equals(s.getId()))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Section not found"));
+
+        Quiz quiz = section.getQuizzes().stream()
+                .filter(q -> quizId.equals(q.getId()))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Quiz not found"));
+
+        int total = quiz.getQuestions() == null ? 0 : quiz.getQuestions().size();
+        int correct = 0;
+        for (int i = 0; i < total; i++) {
+            Integer selected = answers.get(i);
+            Integer correctIdx = quiz.getQuestions().get(i).getCorrectOptionIndex();
+            if (selected != null && selected.equals(correctIdx)) correct++;
+        }
+
+        int score = total == 0 ? 0 : (int)Math.round((correct / (double) total) * 100);
+        boolean passed = score >= (quiz.getPassingScore() == null ? 70 : quiz.getPassingScore());
+
+        com.skill_forge.infy_intern.model.QuizResponse resp = new com.skill_forge.infy_intern.model.QuizResponse();
+        resp.setId(java.util.UUID.randomUUID().toString());
+        resp.setStudentEmail(studentEmail);
+        resp.setCourseId(courseId);
+        resp.setSectionId(sectionId);
+        resp.setQuizId(quizId);
+        resp.setAnswers(answers);
+        resp.setScore(score);
+        resp.setPassed(passed);
+        resp.setDurationSeconds(durationSeconds);
+        resp.setSubmittedAt(java.time.Instant.now());
+
+        if (quizResponseRepository != null) {
+            quizResponseRepository.save(resp);
+        }
+
+        return resp;
     }
 }

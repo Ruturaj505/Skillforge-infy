@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { addQuiz, addSection, createCourse, deleteQuiz, deleteSection, getInstructorCourses, updateQuiz, uploadCourseThumbnail, uploadCourseNote } from '../../api/instructor'
+import { addQuiz, addSection, createCourse, deleteQuiz, deleteSection, getInstructorCourses, updateQuiz, uploadCourseThumbnail, uploadCourseNote, generateQuiz } from '../../api/instructor'
 import LoadingScreen from '../../components/common/LoadingScreen'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Quiz, QuizQuestion } from '../../types'
@@ -32,6 +32,9 @@ const CurriculumBuilder = () => {
       isPublished: false,
     },
   })
+  const [aiTopic, setAiTopic] = useState<string>('')
+  const [aiNumQuestions, setAiNumQuestions] = useState<number>(5)
+  const [aiTimeLimit, setAiTimeLimit] = useState<number | undefined>(undefined)
 
   const { register, handleSubmit, reset } = useForm<CourseFormValues>({
     defaultValues: {
@@ -152,6 +155,19 @@ const CurriculumBuilder = () => {
       queryClient.invalidateQueries({ queryKey: ['instructor-courses'] })
     },
     onError: () => toast.error('Unable to delete quiz'),
+  })
+
+  const generateQuizMutation = useMutation({
+    mutationFn: ({ sectionId, topic, numQuestions, timeLimit }: { sectionId: string; topic: string; numQuestions: number; timeLimit?: number }) =>
+      generateQuiz(selectedCourseId ?? '', sectionId, topic, numQuestions, timeLimit),
+    onSuccess: () => {
+      toast.success('AI-generated quiz saved')
+      setAiTopic('')
+      setAiNumQuestions(5)
+      setAiTimeLimit(undefined)
+      queryClient.invalidateQueries({ queryKey: ['instructor-courses'] })
+    },
+    onError: () => toast.error('Unable to generate quiz'),
   })
 
   // Helper functions for quiz management
@@ -392,6 +408,45 @@ const CurriculumBuilder = () => {
                           ))}
                         </div>
                       )}
+
+                      {/* AI generate quiz */}
+                      <div className="mt-2 space-y-2">
+                        <p className="text-xs font-semibold text-slate-600">Generate quiz from topic (AI)</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          <input
+                            type="text"
+                            placeholder="Topic (e.g. React hooks)"
+                            value={aiTopic}
+                            onChange={(e) => setAiTopic(e.target.value)}
+                            className="rounded-lg border border-slate-200 px-3 py-2 col-span-2"
+                          />
+                          <input
+                            type="number"
+                            min={1}
+                            max={20}
+                            value={aiNumQuestions}
+                            onChange={(e) => setAiNumQuestions(Number(e.target.value))}
+                            className="rounded-lg border border-slate-200 px-3 py-2"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            placeholder="Time limit (sec)"
+                            value={aiTimeLimit ?? ''}
+                            onChange={(e) => setAiTimeLimit(e.target.value ? Number(e.target.value) : undefined)}
+                            className="rounded-lg border border-slate-200 px-3 py-2 w-1/2"
+                          />
+                          <button
+                            type="button"
+                            disabled={!aiTopic || !selectedCourseId}
+                            onClick={() => generateQuizMutation.mutate({ sectionId: section.id, topic: aiTopic, numQuestions: aiNumQuestions, timeLimit: aiTimeLimit })}
+                            className="px-4 py-2 rounded-lg bg-brand-500 text-white text-sm font-semibold disabled:opacity-70"
+                          >
+                            {generateQuizMutation.isPending ? 'Generating...' : 'Generate AI Quiz'}
+                          </button>
+                        </div>
+                      </div>
 
                       {/* Quiz form (when creating new quiz for this section) */}
                       {quizForm.sectionId === section.id && (
