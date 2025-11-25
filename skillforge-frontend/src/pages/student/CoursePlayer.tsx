@@ -6,6 +6,7 @@ import LoadingScreen from '../../components/common/LoadingScreen'
 import VideoPlayer from '../../components/common/VideoPlayer'
 import { useAuth } from '../../contexts/AuthContext'
 import toast from 'react-hot-toast'
+import type { Quiz } from '../../types'
 
 const CoursePlayer = () => {
   const { courseId } = useParams<{ courseId: string }>()
@@ -27,6 +28,11 @@ const CoursePlayer = () => {
   })
 
   const [activeVideo, setActiveVideo] = useState<string | null>(null)
+
+  const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null)
+  const [quizAnswers, setQuizAnswers] = useState<{ [questionId: number]: number }>({})
+  const [quizSubmitted, setQuizSubmitted] = useState(false)
+  const [quizScore, setQuizScore] = useState(0)
 
   const videos = videoQuery.data ?? []
   const currentVideo = useMemo(
@@ -68,6 +74,50 @@ const CoursePlayer = () => {
       progressMutation.mutate(percent)
     }, 2000)
   }
+
+  const submitQuiz = () => {
+    if (!selectedQuiz) return
+
+    // Calculate score
+    let correctCount = 0
+    selectedQuiz.questions?.forEach((q, idx) => {
+      if (quizAnswers[idx] === q.correctOptionIndex) {
+        correctCount++
+      }
+    })
+
+    const score = Math.round((correctCount / (selectedQuiz.questions?.length || 1)) * 100)
+    setQuizScore(score)
+    setQuizSubmitted(true)
+
+    // Show feedback
+    const passed = score >= (selectedQuiz.passingScore || 70)
+    if (passed) {
+      toast.success(`Quiz completed! Score: ${score}% (Passed)`)
+    } else {
+      toast.error(
+        `Quiz completed! Score: ${score}% (Failed - ${selectedQuiz.passingScore}% required)`
+      )
+    }
+  }
+
+  const resetQuiz = () => {
+    setSelectedQuiz(null)
+    setQuizAnswers({})
+    setQuizSubmitted(false)
+    setQuizScore(0)
+  }
+
+  // Get all quizzes from current course sections
+  const allQuizzes = useMemo(() => {
+    const quizzes: (Quiz & { sectionTitle: string })[] = []
+    courseQuery.data?.sections?.forEach((section) => {
+      section.quizzes?.forEach((quiz) => {
+        quizzes.push({ ...quiz, sectionTitle: section.title })
+      })
+    })
+    return quizzes
+  }, [courseQuery.data])
 
   if (courseQuery.isLoading || videoQuery.isLoading || !courseQuery.data) {
     return <LoadingScreen message="Preparing player..." />
@@ -114,6 +164,163 @@ const CoursePlayer = () => {
               </button>
             ))}
           </div>
+
+          {/* Quiz Section */}
+          {allQuizzes.length > 0 && (
+            <div className="pt-4 border-t">
+              <h2 className="text-lg font-semibold text-slate-900 mb-3">Quizzes</h2>
+              {!selectedQuiz ? (
+                <div className="space-y-2 max-h-[420px] overflow-y-auto pr-2">
+                  {allQuizzes.map((quiz) => (
+                    <button
+                      key={quiz.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedQuiz(quiz)
+                        setQuizAnswers({})
+                        setQuizSubmitted(false)
+                      }}
+                      className="w-full text-left p-3 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 transition"
+                    >
+                      <p className="text-sm font-semibold text-slate-900">{quiz.title}</p>
+                      <p className="text-xs text-slate-500">
+                        {quiz.sectionTitle} • {quiz.questions?.length ?? 0} questions
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                // Quiz taking interface
+                <div className="border border-amber-200 rounded-xl p-4 bg-amber-50 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-900">{selectedQuiz.title}</h3>
+                      <p className="text-xs text-slate-500">
+                        Pass with {selectedQuiz.passingScore ?? 70}%
+                      </p>
+                    </div>
+                    {!quizSubmitted && (
+                      <button
+                        type="button"
+                        onClick={resetQuiz}
+                        className="text-xs text-slate-600 hover:text-slate-900"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {!quizSubmitted ? (
+                    <div className="space-y-4 max-h-[400px] overflow-y-auto">
+                      {selectedQuiz.questions?.map((question, qIdx) => (
+                        <div
+                          key={qIdx}
+                          className="bg-white rounded-lg p-3 border border-amber-100 space-y-2"
+                        >
+                          <p className="text-sm font-semibold text-slate-900">
+                            {qIdx + 1}. {question.question}
+                          </p>
+                          <div className="space-y-2">
+                            {question.options?.map((option, oIdx) => (
+                              <label
+                                key={oIdx}
+                                className="flex items-center gap-2 cursor-pointer hover:bg-amber-50 p-1 rounded"
+                              >
+                                <input
+                                  type="radio"
+                                  name={`question-${qIdx}`}
+                                  checked={quizAnswers[qIdx] === oIdx}
+                                  onChange={() =>
+                                    setQuizAnswers((prev) => ({ ...prev, [qIdx]: oIdx }))
+                                  }
+                                  className="w-4 h-4"
+                                />
+                                <span className="text-sm text-slate-700">{option}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    // Results display
+                    <div className="space-y-4">
+                      <div className="bg-white rounded-lg p-4 text-center space-y-2">
+                        <p className="text-3xl font-bold text-slate-900">{quizScore}%</p>
+                        <p className={`text-lg font-semibold ${
+                          quizScore >= (selectedQuiz.passingScore ?? 70)
+                            ? 'text-green-600'
+                            : 'text-red-600'
+                        }`}>
+                          {quizScore >= (selectedQuiz.passingScore ?? 70) ? '✓ Passed' : '✗ Failed'}
+                        </p>
+                      </div>
+
+                      {/* Show answers review */}
+                      <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                        {selectedQuiz.questions?.map((question, qIdx) => {
+                          const isCorrect = quizAnswers[qIdx] === question.correctOptionIndex
+                          return (
+                            <div
+                              key={qIdx}
+                              className={`rounded-lg p-3 border ${
+                                isCorrect
+                                  ? 'border-green-200 bg-green-50'
+                                  : 'border-red-200 bg-red-50'
+                              }`}
+                            >
+                              <p className="text-sm font-semibold text-slate-900">
+                                {qIdx + 1}. {question.question}
+                              </p>
+                              <p className="text-xs text-slate-600 mt-1">
+                                <span className={isCorrect ? 'text-green-700' : 'text-red-700'}>
+                                  Your answer:{' '}
+                                </span>
+                                {question.options?.[quizAnswers[qIdx]]}
+                              </p>
+                              {!isCorrect && (
+                                <p className="text-xs text-green-700 mt-1">
+                                  Correct answer: {question.options?.[question.correctOptionIndex]}
+                                </p>
+                              )}
+                              {question.explanation && (
+                                <p className="text-xs text-slate-600 mt-2 italic">
+                                  {question.explanation}
+                                </p>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {!quizSubmitted && (
+                    <button
+                      type="button"
+                      onClick={submitQuiz}
+                      disabled={
+                        Object.keys(quizAnswers).length !== (selectedQuiz.questions?.length ?? 0)
+                      }
+                      className="w-full py-2 rounded-lg bg-amber-600 text-white font-semibold hover:bg-amber-700 disabled:opacity-70 transition"
+                    >
+                      Submit quiz
+                    </button>
+                  )}
+
+                  {quizSubmitted && (
+                    <button
+                      type="button"
+                      onClick={resetQuiz}
+                      className="w-full py-2 rounded-lg bg-slate-600 text-white font-semibold hover:bg-slate-700 transition"
+                    >
+                      Back to quizzes
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div className="space-y-3 glass-panel p-5">
           <h3 className="text-lg font-semibold text-slate-900">Progress tracking</h3>
