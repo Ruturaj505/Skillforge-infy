@@ -1,5 +1,5 @@
 import apiClient from './http'
-import type { Course, VideoEntity } from '../types'
+import type { Course, VideoEntity, Quiz } from '../types'
 
 export const getInstructorCourses = async (): Promise<Course[]> => {
   const { data } = await apiClient.get<Course[]>('/api/instructor/courses')
@@ -87,3 +87,31 @@ export const uploadCourseNote = async (courseId: string, file: File, title?: str
   return data
 }
 
+// 🟢 Quiz API helpers
+export const addQuiz = async (courseId: string, sectionId: string, quiz: Partial<Quiz>) => {
+  const { data } = await apiClient.post<Course>(
+    `/api/instructor/courses/${courseId}/sections/${sectionId}/quizzes`,
+    quiz
+  )
+  return data
+}
+
+export const updateQuiz = async (
+  courseId: string,
+  sectionId: string,
+  quizId: string,
+  quiz: Partial<Quiz>
+) => {
+  const { data } = await apiClient.put<Course>(
+    `/api/instructor/courses/${courseId}/sections/${sectionId}/quizzes/${quizId}`,
+    quiz
+  )
+  return data
+}
+
+export const deleteQuiz = async (courseId: string, sectionId: string, quizId: string) => {
+  const { data } = await apiClient.delete<Course>(
+    `/api/instructor/courses/${courseId}/sections/${sectionId}/quizzes/${quizId}`
+  )
+  return data
+}

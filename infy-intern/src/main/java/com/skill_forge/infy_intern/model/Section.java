@@ -8,6 +8,7 @@ public class Section {
     private String title;
     private List<VideoContent> videos = new ArrayList<>();
     private List<Object> lectures = new ArrayList<>(); // For frontend compatibility
+    private List<Quiz> quizzes = new ArrayList<>();
 
     public String getId() {
         return id;
@@ -39,5 +40,13 @@ public class Section {
     
     public void setLectures(List<Object> lectures) {
         this.lectures = lectures != null ? lectures : new ArrayList<>();
+    }
+
+    public List<Quiz> getQuizzes() {
+        return quizzes;
+    }
+
+    public void setQuizzes(List<Quiz> quizzes) {
+        this.quizzes = quizzes != null ? quizzes : new ArrayList<>();
     }
 }

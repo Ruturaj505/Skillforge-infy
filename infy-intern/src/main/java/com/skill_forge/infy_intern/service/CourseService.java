@@ -2,6 +2,7 @@ package com.skill_forge.infy_intern.service;
 
 import com.skill_forge.infy_intern.model.Course;
 import com.skill_forge.infy_intern.model.Note;
+import com.skill_forge.infy_intern.model.Quiz;
 import com.skill_forge.infy_intern.model.Section;
 import com.skill_forge.infy_intern.model.VideoEntity;
 import com.skill_forge.infy_intern.repository.CourseRepository;
@@ -321,6 +322,72 @@ public class CourseService {
             course.setNotes(new java.util.ArrayList<>());
         }
         course.getNotes().add(note);
+        return courseRepository.save(course);
+    }
+
+    // 🟢 Add quiz to section
+    public Course addQuizToSection(String courseId, String sectionId, Quiz quiz) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found"));
+
+        Section section = course.getSections().stream()
+                .filter(s -> sectionId.equals(s.getId()))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Section not found"));
+
+        // Generate ID if not present
+        if (quiz.getId() == null || quiz.getId().isEmpty()) {
+            quiz.setId(java.util.UUID.randomUUID().toString());
+        }
+
+        // Initialize quizzes list if null
+        if (section.getQuizzes() == null) {
+            section.setQuizzes(new java.util.ArrayList<>());
+        }
+
+        section.getQuizzes().add(quiz);
+        return courseRepository.save(course);
+    }
+
+    // 🟢 Update quiz in section
+    public Course updateQuiz(String courseId, String sectionId, String quizId, Quiz updatedQuiz) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found"));
+
+        Section section = course.getSections().stream()
+                .filter(s -> sectionId.equals(s.getId()))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Section not found"));
+
+        Quiz existingQuiz = section.getQuizzes().stream()
+                .filter(q -> quizId.equals(q.getId()))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Quiz not found"));
+
+        // Update quiz fields
+        existingQuiz.setTitle(updatedQuiz.getTitle());
+        existingQuiz.setDescription(updatedQuiz.getDescription());
+        existingQuiz.setQuestions(updatedQuiz.getQuestions());
+        existingQuiz.setPassingScore(updatedQuiz.getPassingScore());
+        existingQuiz.setIsPublished(updatedQuiz.getIsPublished());
+
+        return courseRepository.save(course);
+    }
+
+    // 🟢 Delete quiz from section
+    public Course deleteQuizFromSection(String courseId, String sectionId, String quizId) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found"));
+
+        Section section = course.getSections().stream()
+                .filter(s -> sectionId.equals(s.getId()))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Section not found"));
+
+        if (section.getQuizzes() != null) {
+            section.getQuizzes().removeIf(q -> quizId.equals(q.getId()));
+        }
+
         return courseRepository.save(course);
     }
 }

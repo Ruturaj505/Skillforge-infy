@@ -16,10 +16,28 @@ export interface Lecture {
   thumbnail?: string
 }
 
+export interface QuizQuestion {
+  id?: string
+  question: string
+  options: string[]
+  correctOptionIndex: number
+  explanation?: string
+}
+
+export interface Quiz {
+  id?: string
+  title: string
+  description?: string
+  questions: QuizQuestion[]
+  passingScore?: number
+  isPublished?: boolean
+}
+
 export interface Section {
   id: string
   title: string
   lectures?: Lecture[]
+  quizzes?: Quiz[]
 }
 
 export interface Course {

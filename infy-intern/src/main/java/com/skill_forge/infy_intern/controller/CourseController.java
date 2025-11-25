@@ -1,6 +1,7 @@
 package com.skill_forge.infy_intern.controller;
 
 import com.skill_forge.infy_intern.model.Course;
+import com.skill_forge.infy_intern.model.Quiz;
 import com.skill_forge.infy_intern.model.VideoEntity;
 import com.skill_forge.infy_intern.service.CourseService;
 import org.springframework.http.ResponseEntity;
@@ -138,6 +139,46 @@ public class CourseController {
                                                @RequestParam(required = false) String title) {
         try {
             Course updated = courseService.uploadCourseNote(courseId, file, title);
+            return ResponseEntity.ok(updated);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // 🟢 Add quiz to section
+    @PostMapping("/{courseId}/sections/{sectionId}/quizzes")
+    public ResponseEntity<?> addQuiz(@PathVariable String courseId,
+                                     @PathVariable String sectionId,
+                                     @RequestBody Quiz quiz) {
+        try {
+            Course updated = courseService.addQuizToSection(courseId, sectionId, quiz);
+            return ResponseEntity.ok(updated);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // 🟢 Update quiz in section
+    @PutMapping("/{courseId}/sections/{sectionId}/quizzes/{quizId}")
+    public ResponseEntity<?> updateQuiz(@PathVariable String courseId,
+                                        @PathVariable String sectionId,
+                                        @PathVariable String quizId,
+                                        @RequestBody Quiz quiz) {
+        try {
+            Course updated = courseService.updateQuiz(courseId, sectionId, quizId, quiz);
+            return ResponseEntity.ok(updated);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // 🟢 Delete quiz from section
+    @DeleteMapping("/{courseId}/sections/{sectionId}/quizzes/{quizId}")
+    public ResponseEntity<?> deleteQuiz(@PathVariable String courseId,
+                                        @PathVariable String sectionId,
+                                        @PathVariable String quizId) {
+        try {
+            Course updated = courseService.deleteQuizFromSection(courseId, sectionId, quizId);
             return ResponseEntity.ok(updated);
         } catch (RuntimeException e) {
             return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
